@@ -1,0 +1,111 @@
+# Import required libraries
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split  # Not used but commonly imported
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Task 1: Preprocess the data
+# Load the CSV file containing temperature data for multiple cities
+data = pd.read_csv('temperature.csv')
+
+# Convert the 'Date' column from string to proper datetime format (day/month/year hour:minute)
+data['Date'] = pd.to_datetime(data['Date'], format='%d/%m/%Y %H:%M')
+
+# Choose Eilat (southern Israel) - has hot desert climate similar to parts of Egypt
+city = 'Eilat'
+
+# Handle missing temperature values using forward fill (carry last valid value forward) because the normal way doesnt work
+# This is a common and safe method for time series data
+data[city] = data[city].ffill()
+
+# Extract just the date (without time) to aggregate measurements by day
+data['Day'] = data['Date'].dt.date
+
+# Group all records by day and calculate the daily average temperature for Eilat
+daily_data = data.groupby('Day')[city].mean().reset_index()
+daily_data.columns = ['Day', 'Avg_Temp']  # Rename columns for clarity
+
+# Convert dates to number of days since 1 AD
+# This creates a numerical feature that increases by 1 each day - perfect for linear regression
+daily_data['Day_Ordinal'] = daily_data['Day'].apply(lambda x: x.toordinal())
+
+# Task 2: Visualize the data
+# Create a time series plot of daily average temperatures
+plt.figure(figsize=(12, 6))
+plt.plot(daily_data['Day'], daily_data['Avg_Temp'], marker='o', linestyle='-', color='b', markersize=3)
+plt.title('Daily Average Temperature in Eilat (Near Egypt Border)', fontsize=14)
+plt.xlabel('Date')
+plt.ylabel('Average Temperature (K)')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()  # Prevents label cutoff
+plt.show()
+
+# Observation: Clear seasonal pattern visible - hot summers, cooler winters
+
+# Task 3: Prepare features and target, then split chronologically
+X = daily_data[['Day_Ordinal']]    # Feature: day number as integer
+y = daily_data['Avg_Temp']         # Target: temperature to predict
+
+# Split data chronologically: first 80% for training, last 20% for testing
+# Important for time series - we never shuffle!
+train_size = int(0.8 * len(daily_data))
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# Task 4: Train a Linear Regression model
+model = LinearRegression()         # Creates a simple straight-line model
+model.fit(X_train, y_train)        # Finds the best-fitting line through training data
+
+# Task 5: Make predictions and evaluate model performance
+y_pred = model.predict(X_test)     # Predict temperatures for the test period
+
+# Calculate evaluation metrics
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f"Mean Squared Error: {mse:.2f}")
+print(f"R² Score: {r2:.2f}")       # Note: R² will likely be low due to strong seasonality
+
+# Plot actual vs predicted values on the test set
+plt.figure(figsize=(12, 6))
+plt.plot(daily_data['Day'][train_size:], y_test, label='Actual Temperature', color='b')
+plt.plot(daily_data['Day'][train_size:], y_pred, label='Linear Regression Prediction', color='r', linestyle='--')
+plt.title('Actual vs Predicted Daily Temperature in Eilat (Test Period)', fontsize=14)
+plt.xlabel('Date')
+plt.ylabel('Average Temperature (K)')
+plt.legend()
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# Key Insight: The red dashed line is almost straight - linear regression captures long-term trend only
+# It completely fails to model seasonal (yearly) cycles
+
+# Task 6: Summary and Conclusions
+"""
+Project Summary:
+- Successfully loaded and cleaned temperature time series data
+- Focused on Eilat (hot desert climate, relevant to Egypt border region)
+- Aggregated hourly data to daily averages
+- Used forward fill to handle missing values appropriately
+- Visualized clear seasonal temperature patterns
+- Applied simple linear regression using day number as the only feature
+- Evaluated model with MSE and R² (expected low R² due to seasonality)
+
+Limitations:
+Linear regression assumes a straight-line relationship and cannot capture repeating seasonal patterns.
+The model only learns an overall trend (e.g., slight warming or cooling over years).
+
+Recommendations for improvement:
+- Add seasonal features (sin/cos of day-of-year)
+- Use time series models like SARIMA, Prophet, or LSTM
+- Include lagged temperatures or moving averages as features
+
+This code demonstrates a complete basic data science workflow using pandas, matplotlib, and scikit-learn.
+"""
+
+print("Analysis complete. Linear model trained and evaluated.")
